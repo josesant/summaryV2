@@ -18,14 +18,14 @@ const categories = [
     },
     {
         name: 'Educativo / Tutorial',
-        promptDetail: 'Por favor, proporciona un resumen que destaque los pasos (enumerados si es posible), técnicas utilizadas y las conclusiones esenciales, tambien expresa las formulas utilizadas',
+        promptDetail: 'Por favor, Necesito un resumen detallado que ilustre claramente el proceso educativo o tutorial. Enumera los pasos de manera ordenada, menciona las técnicas clave y, si es aplicable, las fórmulas matemáticas involucradas. Concluye con las lecciones esenciales o los resultados obtenidos, enfatizando su importancia en el aprendizaje',
     },
     {
         name: 'Historias / Narrativas',
         promptDetail: 'Por favor, proporciona un resumen que destaque los eventos clave, personajes principales y cómo se desarrolla la historia hasta su desenlace.',
     },
     {
-        name: 'Noticias',
+        name: 'Noticias', 
         promptDetail: 'Por favor, proporciona un resumen que presente hechos relevantes, eventos actuales y cualquier declaración oficial mencionada.',
     },
     {
@@ -48,7 +48,7 @@ async function getVideoData(videoId) {
 async function getSubtitles(videoId) {
     const languages = ['en', 'es', 'fr', 'de', 'it', 'pt'];
 
-    let captions;
+    let captions
 
     for (let lang of languages) {
         try {
@@ -108,8 +108,8 @@ async function getSubtitles(videoId) {
         const subtitles = await getSubtitles(videoId);
 
         lastMessage.content=`titulo: "${videoData.title}`
-
-        const categorizationPrompt = `Dada la transcripción del video titulado "${videoData.title}" con descripción "${videoData.description}" y subtítulos "${subtitles}", ¿en qué categoría encajaría de las siguientes opciones? ${categories.map(cat => cat.name).join(', ')}.`;
+       
+        const categorizationPrompt = `Dada la transcripción del video titulado "${videoData.title}" y subtítulos "${subtitles}", ¿en qué categoría encajaría de las siguientes opciones? ${categories.map(cat => cat.name).join(', ')}.`;
 
    
         const categorization = await openai.createChatCompletion({
@@ -122,8 +122,9 @@ async function getSubtitles(videoId) {
     
         // Procesamos el stream para extraer la categoría
         const categorizationData = await categorization.json();
+        
         const videoCategory = categorizationData.choices[0].message.content.trim();      
-    
+    console.log(videoCategory)
         const categoryPrompt = categories.find(cat => cat.name === videoCategory.trim()).promptDetail;
         const summaryPrompt = `Basándote en la categoría "${videoCategory}", por favor proporciona un resumen del video titulado "${videoData.title}" con descripción "${videoData.description}" y subtítulos "${subtitles}". ${categoryPrompt}`;
         
@@ -143,46 +144,45 @@ async function getSubtitles(videoId) {
 }
 
 export async function GET(request) {
-    const videoId = 'kwJUgXTlYwo';
+    const videoId = 'hmWfOi9ZRk8';
     const videoData = await getVideoData(videoId);
-    console.log(videoData)
-
     const subtitles = await getSubtitles(videoId);
     if (!subtitles) {
         console.warn('No se encontraron subtítulos para el video.');
         return; // Cortamos el proceso si no hay subtítulos
     } 
 
-    const categorizationPrompt = `Dada la transcripción del video titulado "${videoData.title}" con descripción "${videoData.description}" y subtítulos "${subtitles}", ¿en qué categoría encajaría de las siguientes opciones? ${categories.map(cat => cat.name).join(', ')}.`;
+    const categorizationPrompt = `Dada la transcripción del video titulado "${videoData.title}" y subtítulos "${subtitles}", ¿en qué categoría encajaría de las siguientes opciones? ${categories.map(cat => cat.name).join(', ')}.`;
 
-   
     const categorization = await openai.createChatCompletion({
         model: 'gpt-3.5-turbo-16k',
         messages: [
-            { role: 'system', content: 'Eres un asistente experto en categorizar videos. debes delvolver la categoria sin agregar nada mas!! tal cual esta dentro del pack de categorias' },
+            { role: 'system', content: 'Eres un asistente experto en categorizar videos. Debes devolver la categoría sin agregar nada más, tal cual está dentro del pack de categorías.' },
             { role: 'user', content: categorizationPrompt }
         ]
     });
 
-    // Procesamos el stream para extraer la categoría
     const categorizationData = await categorization.json();
     const videoCategory = categorizationData.choices[0].message.content.trim();
-    console.log(videoCategory)
 
-    const categoryPrompt = categories.find(cat => cat.name === videoCategory.trim()).promptDetail;
-    const summaryPrompt = `Basándote en la categoría "${videoCategory}", por favor proporciona un resumen del video titulado "${videoData.title}" con descripción "${videoData.description}" y subtítulos "${subtitles}". ${categoryPrompt}`;
+    if (!categories.some(cat => cat.name === videoCategory)) {
+        console.error('Categoría no reconocida.');
+        return;
+    }
+
+    const categoryPrompt = categories.find(cat => cat.name === videoCategory).promptDetail;
+    const summaryPrompt = `Basándote en la categoría "${videoCategory}", por favor proporciona un resumen del video titulado "${videoData.title}" y subtítulos "${subtitles}". ${categoryPrompt}`;
     
     const summaryStream = await openai.createChatCompletion({
         model: 'gpt-3.5-turbo-16k',
         stream: true,
         messages: [
-            { role: 'system', content: 'Eres un asistente experto en realizar resumenes tomando la categoria y el prompt dado.' },
+            { role: 'system', content: `Eres un asistente experto que realiza resúmenes.` },
             { role: 'user', content: summaryPrompt }
         ]
     });
 
-    const stream = OpenAIStream(summaryStream)
+    const stream = OpenAIStream(summaryStream);
 
-    return new StreamingTextResponse(stream)
-
+    return new StreamingTextResponse(stream);
 }
